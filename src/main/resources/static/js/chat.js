@@ -71,6 +71,7 @@ window.downloadFile = async function (messageId) {
 };
 
 window.messageReply = async function(messageId) {
+    closeEdit();
     const messageWrapper = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!messageWrapper) return;
     const messageContent = messageWrapper.querySelector('.message-content');
@@ -121,25 +122,31 @@ window.messageReply = async function(messageId) {
                 replyPreview.className = 'message-reply-preview active';
                 replyPreview.innerHTML = `
                     <div class="reply-container">
-                        <span class="reply-icon">
-                            <span class="reply-indicator">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" id="reply">
-                                   <linearGradient id="a" x1="169.657" x2="406.21" y1="131.461" y2="368.014" gradientTransform="matrix(1 0 0 -1 0 514)" gradientUnits="userSpaceOnUse">
-                                     <stop offset="0" stop-color="#332c81"></stop>
-                                     <stop offset="1" stop-color="#e21d73"></stop>
-                                   </linearGradient>
-                                   <path fill="url(#a)" d="M14.1 191.4 186 43c15-13 38.8-2.4 38.8 17.7v78.2C381.6 140.7 506 172.1 506 320.8c0 60-38.7 119.4-81.4 150.5-13.3 9.7-32.3-2.5-27.4-18.2 44.3-141.6-21-179.2-172.5-181.4v85.9c0 20.2-23.7 30.7-38.8 17.7L14.1 226.9c-10.8-9.4-10.8-26.2 0-35.5z"></path>
-                                 </svg> Replying Message
-                            </span>
-                        </span>
-                        <div class="close-reply" onclick="closeReply()">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20   " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
+                        <!-- Top Bar: Houses the left indicator and the right close icon -->
+                        <div class="reply-header">
+                            <div class="reply-indicator">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="reply-svg-icon" id="reply">
+                                    <linearGradient id="a" x1="169.657" x2="406.21" y1="131.461" y2="368.014" gradientTransform="matrix(1 0 0 -1 0 514)" gradientUnits="userSpaceOnUse">
+                                        <stop offset="0" stop-color="#332c81"></stop>
+                                        <stop offset="1" stop-color="#e21d73"></stop>
+                                    </linearGradient>
+                                    <path fill="url(#a)" d="M14.1 191.4 186 43c15-13 38.8-2.4 38.8 17.7v78.2C381.6 140.7 506 172.1 506 320.8c0 60-38.7 119.4-81.4 150.5-13.3 9.7-32.3-2.5-27.4-18.2 44.3-141.6-21-179.2-172.5-181.4v85.9c0 20.2-23.7 30.7-38.8 17.7L14.1 226.9c-10.8-9.4-10.8-26.2 0-35.5z"></path>
+                                </svg> 
+                                <span>Replying Message</span>
+                            </div>
+                            
+                            <div class="close-reply" onclick="closeReply()">
+                                <!-- Fixed typo: height="20 " had extra spaces -->
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </div>
                         </div>
+                        
+                        <!-- Bottom Content: Message text body and metadata info stack -->
                         <div class="reply-content">
-                            ${messageText.innerHTML}
+                            <div class="reply-text-body">${messageText.innerHTML}</div>
                             <div class="reply-meta">${senderName}, ${timestamp}</div>
                         </div>
                     </div>
@@ -160,7 +167,18 @@ window.messageReply = async function(messageId) {
         });
 };
 
+// trix toolbar dyamic positioning on message-edit-preview/message-reply-preview close
+window.resetToolbar = function () {
+    const toggleBtn = document.querySelector(".toolbar-toggle-btn");
+
+    // Check if the button exists and if it contains the 'active' class
+    if (toggleBtn && toggleBtn.classList.contains("active")) {
+        toggleBtn.click();
+    }
+}
+
 window.closeReply = function() {
+    resetToolbar();
     const replyPreview = document.querySelector('.message-reply-preview');
     const editorWrapper = document.querySelector('.editor-wrapper');
 
@@ -172,6 +190,7 @@ window.closeReply = function() {
 };
 
 window.editMessage = async function (messageId) {
+    closeReply();
     const messageWrapper = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!messageWrapper) return;
 
@@ -181,75 +200,69 @@ window.editMessage = async function (messageId) {
 
     // Prevent multiple edits at once
     const existingPreview = document.querySelector(".message-edit-preview");
-    if (existingPreview) {
-        existingPreview.remove();
-    }
+    if (existingPreview) existingPreview.remove();
 
     // Extract sender name from metadata
     const senderIdMatch = messageWrapper.querySelector(".message-metadata")?.innerText.match(/senderId:\s*(\d+)/);
     if (!senderIdMatch) return;
     const senderId = senderIdMatch[1];
 
+    const timestamp = messageWrapper.querySelector(".message-date")?.textContent || "Unknown Time";
+
+    // Extract message text (including rich text formatting)
+    const textSpan = messageContent.querySelector('span:not(.message-reply-reference > span)');
+    const messageHtml = textSpan.cloneNode(true);
+
+    // Clean up indicators
+    let editedIndicator = messageHtml.querySelector(".edited-indicator");
+    if (editedIndicator) editedIndicator.remove();
+
+    // Extract attachments and remove the image hover text
+    const attachmentsContainer = messageContent.querySelector(".attachments-container");
+    let attachmentsHtml = "";
+    if (attachmentsContainer) {
+        const clonedAttachments = attachmentsContainer.cloneNode(true);
+        clonedAttachments.querySelectorAll(".image-wrapper .image-hover-text").forEach(el => el.remove());
+        attachmentsHtml = clonedAttachments.outerHTML;
+    }
+
+    // LOAD CONTENT INTO TRIX INSTANTLY FOR MAX RESPONSIVENESS
+    const fullContent = messageHtml.innerHTML + attachmentsHtml;
+    trixEditor.editor.loadHTML(fullContent);
+    currentEditingMessageId = messageId;
+
+    // RENDER PREVIEW BOX IMMEDIATELY WITH A LOADING PLACEHOLDER
+    const editPreview = document.createElement("div");
+    editPreview.className = "message-edit-preview active";
+    editPreview.innerHTML = `
+        <div class="edit-container">
+            <div class="edit-header">
+                <span class="edit-icon">✏️ Editing Message</span>
+                <button class="close-edit" onclick="closeEdit()">✕</button>
+            </div>
+            <div class="edit-meta">
+                <strong id="edit-preview-username">Loading...</strong> • <span>${timestamp}</span>
+            </div>
+            <div class="edit-preview-content">${messageHtml.innerHTML}</div>
+        </div>
+    `;
+
+    editorWrapper.insertBefore(editPreview, editorWrapper.firstChild);
+    editorWrapper.classList.add("edit-active");
+    trixEditor.focus();
+
+    // FETCH USERNAME IN THE BACKGROUND WITHOUT BLOCKING THE UI
     try {
         const response = await fetch(`/api/users/getUsername?id=${Number(senderId)}`);
         if (!response.ok) throw new Error("Failed to fetch username");
         const senderName = await response.text();
 
-        const timestamp = messageWrapper.querySelector(".message-date")?.textContent || "Unknown Time"; // Extract timestamp
-
-        // Extract message text (including rich text formatting)
-        const textSpan = messageContent.querySelector('span:not(.message-reply-reference > span)');
-        const messageHtml = textSpan.cloneNode(true);
-        // Extract attachments and remove the image hover text
-        const attachmentsContainer = messageContent.querySelector(".attachments-container");
-        let attachmentsHtml = "";
-        if (attachmentsContainer) {
-            // Remove image hover text before adding to the Trix editor
-            const imageWrappers = attachmentsContainer.querySelectorAll(".image-wrapper");
-            imageWrappers.forEach(wrapper => {
-                const hoverText = wrapper.querySelector(".image-hover-text");
-                if (hoverText) {
-                    hoverText.remove(); // Remove the "Preview Image" text
-                }
-            });
-            attachmentsHtml = attachmentsContainer.outerHTML;
-        }
-
-        // Load message content (with attachments) into the Trix editor
-        let editedIndicator = messageHtml.querySelector(".edited-indicator");
-        if (editedIndicator) {
-            editedIndicator.remove();
-        }
-        const fullContent = messageHtml.innerHTML + attachmentsHtml;
-        trixEditor.editor.loadHTML(fullContent);
-
-        // Create Edit Preview (Styled Similar to Reply)
-        const editPreview = document.createElement("div");
-        editPreview.className = "message-edit-preview active";
-        editPreview.innerHTML = `
-            <div class="edit-container">
-                <div class="edit-header">
-                    <span class="edit-icon">✏️ Editing Message</span>
-                    <button class="close-edit" onclick="closeEdit()">✖</button>
-                </div>
-                <div class="edit-meta">
-                    <strong>${senderName}</strong> • <span>${timestamp}</span>
-                </div>
-                <div class="edit-preview-content">${messageHtml.innerHTML}</div>
-            </div>
-        `;
-
-        // Insert preview before editor
-        editorWrapper.insertBefore(editPreview, editorWrapper.firstChild);
-        editorWrapper.classList.add("edit-active");
-
-        // Store editing message ID
-        currentEditingMessageId = messageId;
-
-        // Focus the editor
-        trixEditor.focus();
+        const usernameEl = document.getElementById("edit-preview-username");
+        if (usernameEl) usernameEl.textContent = senderName;
     } catch (error) {
         console.error("Error fetching username:", error);
+        const usernameEl = document.getElementById("edit-preview-username");
+        if (usernameEl) usernameEl.textContent = "User";
     }
 };
 
@@ -260,163 +273,382 @@ window.saveEditedMessage = async function () {
     if (!messageWrapper) return;
 
     const trixEditor = document.querySelector("trix-editor");
-    const messageContent = messageWrapper.querySelector(".message-content");
+    var messageContent = messageWrapper.querySelector(".message-content");
 
-     // Get the formatted message content
+    // Get the formatted message content HTML string
     const messageContentInput = document.getElementById("message-content");
     let newMessageHtml = messageContentInput.value;
+
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = newMessageHtml;
 
-    // Remove all <figure> elements
-    const figureElements = tempDiv.querySelectorAll('figure');
-    figureElements.forEach(figure => {
-        figure.remove();
+    // Clean DOM markup structural trees for storage saving
+    tempDiv.querySelectorAll('figure').forEach(fig => fig.remove());
+    tempDiv.querySelectorAll('div').forEach(div => {
+        if (div.innerHTML.trim() === '') div.remove();
     });
 
-    // Remove empty div elements
-    const divElements = tempDiv.querySelectorAll('div');
-    divElements.forEach(div => {
-        if (div.innerHTML.trim() === '') {
-            div.remove();
-        }
-    });
-
-    // Get the modified HTML without <figure> elements
     newMessageHtml = tempDiv.innerHTML;
-    let textContent = messageContent.querySelector('span:not(.message-reply-reference > span)');
-    // convert to html
-    const tempDiv2 = document.createElement('div');
-    tempDiv2.innerHTML = newMessageHtml;
-    textContent.innerHTML = tempDiv2.innerHTML;
 
+    // USE TRIX DATA HERE: Get currently staged file attachments for uploading
     const attachments = trixEditor.editor.getDocument().getAttachments();
-    const fileAttachments = attachments.filter(attachment => attachment.file);
-    if (newMessageHtml === "" && attachments.length == 0) {
+
+    // Filter to capture ONLY new attachments that need to be uploaded (have a file object OR a blob URL)
+    const newFileAttachments = attachments.filter(attachment => attachment.file !== null);
+    if (newMessageHtml.trim() === "" && attachments.length === 0) {
         alert("Message cannot be empty!");
         return;
     }
 
-    closeEdit();
-
-    if (fileAttachments.length > 5) {
+    if (attachments.length > 5) {
         showAttachmentLimitNotification();
         return;
     }
 
     try {
+        // Fetch current user verification status
         const senderId = await fetch(`/api/users/currentUser/getId`)
-            .then(response => response.json())
-            .catch(error => {
-                console.error('Error fetching current user', error);
+            .then(res => res.json())
+            .catch(err => {
+                console.error('Error fetching current user', err);
                 return -1;
             });
         if (senderId === -1) return;
 
+        // Initialize Batch Operations
         const batch = writeBatch(db);
+
+        // 1. CLEAR EXSTING DATABASE RECORDS: Find and queue deletions for old attachment docs
+        const existingSnapshot = await getDocs(
+            query(collection(db, "Attachments"), where("messageId", "==", currentEditingMessageId))
+        );
+        // 1. Initialize an array to hold your parsed attachments
+        const initialAttachments = [];
+
+        existingSnapshot.docs.forEach(docSnap => {
+            // 2. Safely extract the clean JavaScript object from the Firestore snapshot
+            const data = docSnap.data();
+
+            // 3. Push the fields you need into your array
+            if (data) {
+                initialAttachments.push({
+                    id: docSnap.id, // Good practice to keep the Firestore document ID
+                    downloadUrl: data.downloadUrl,
+                    fileName: data.fileName,
+                    fileSize: data.fileSize ? Number(data.fileSize) : 0, // Ensures it's a JS number, not a string
+                    fileType: data.fileType,
+                    messageId: data.messageId,
+                    senderId: data.senderId,
+                    timestamp: data.timestamp // This will be a Firestore Timestamp object
+                });
+            }
+
+            // 4. Proceed with your batch deletion
+            batch.delete(docSnap.ref);
+        });
+
+        // Update the main message text
         const messageRef = doc(db, "Messages", currentEditingMessageId);
         batch.update(messageRef, { text: newMessageHtml, edited: 1, editRenderedOn: [] });
 
-        // Fetch existing attachments from Firebase
-        const existingAttachmentsSnapshot = await getDocs(
-            query(collection(db, "Attachments"), where("messageId", "==", currentEditingMessageId))
-        );
-        const existingAttachments = existingAttachmentsSnapshot.docs.map(doc => ({
-            docId: doc.id, // Store Firestore document ID separately
-            ...doc.data()
-        }));
-        // Extract preview URLs from attachments
-        const previewUrls = new Set(
-            attachments.map(att => att.getAttributes().url ? att.getAttributes().url.trim().toLowerCase() : "")
-        );
-
-        const deletedAttachments = previewUrls.size == 0 ? existingAttachments : existingAttachments.filter(att => previewUrls.size > 0 && !previewUrls.has(att.downloadUrl.trim().toLowerCase()));
-        // Ensure deletedAttachments has the correct IDs
-        console.log("Deleted Attachments:", deletedAttachments);
-
-        await Promise.all(deletedAttachments.map(async (attachment) => {
-            batch.delete(doc(db, "Attachments", attachment.docId)); // Use Firestore doc ID
-            await fetch(`/api/files/delete?fileName=${encodeURIComponent(attachment.fileName)}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' }
-            });
-        }));
-
-        // Upload new attachments
-        if (fileAttachments.length > 0) {
+        // 2. PROCESS CURRENT TRIX ATTACHMENTS
+        if (attachments.length > 0) {
             await Promise.all(
-                fileAttachments.map(async (attachment) => {
-                    const file = attachment.file;
-                    try {
+                attachments.map(async (attachment) => {
+                    let downloadUrl = "";
+                    let fileName = "";
+                    let fileSize = 0;
+                    let fileType = "";
+
+                    if (attachment.file) {
+                        // This is a BRAND NEW file (needs uploading)
+                        const file = attachment.file;
                         const formData = new FormData();
                         formData.append('file', file);
 
                         const response = await fetch('/api/files/upload', { method: 'POST', body: formData });
-                        if (!response.ok) throw new Error(`Upload failed! Status: ${response.status}`);
-                        const downloadUrl = await response.text();
+                        if (!response.ok) throw new Error(`Upload failed!`);
+                        downloadUrl = await response.text();
 
-                        const attachmentData = {
-                            messageId: currentEditingMessageId,
-                            senderId: senderId,
-                            fileName: file.name,
-                            fileSize: file.size,
-                            fileType: file.type,
-                            downloadUrl: downloadUrl,
-                            timestamp: new Date()
-                        };
-                        batch.set(doc(collection(db, "Attachments")), attachmentData);
-                    } catch (error) {
-                        console.error("Error uploading to backend:", error);
+                        fileName = file.name;
+                        fileSize = file.size;
+                        fileType = file.type;
+                    } else {
+                        // This is an ALREADY UPLOADED file (keep its remote metadata)
+                        downloadUrl = attachment.previewURL || attachment.attributes?.values?.url || "";
+                        // Fallback text parsing for names from R2/S3 paths if properties are nested
+                        fileName = attachment.attributes?.values?.filename || "Attached Image";
+                        fileSize = attachment.attributes?.values?.filesize || 0;
+                        fileType = "image/png"; // Default fallback
                     }
+
+                    // 3. RE-ADD EVERYTHING FRESH: Create a new doc for every current attachment
+                    const attachmentRef = doc(collection(db, "Attachments"));
+                    batch.set(attachmentRef, {
+                        messageId: currentEditingMessageId,
+                        senderId: senderId,
+                        fileName: fileName,
+                        fileSize: fileSize,
+                        fileType: fileType,
+                        downloadUrl: downloadUrl,
+                        timestamp: new Date()
+                    });
                 })
             );
         }
 
+        // 4. COMMIT EVERYTHING AT ONCE (Deletions, Updates, and fresh Inserts)
         await batch.commit();
 
-        // Refetch updated attachments before rendering
-        const updatedAttachmentsSnapshot = await getDocs(
+        // 2. FIREBASE SNAPSHOT: Fetch fresh state after uploads/modifications finish
+        const updatedSnapshot = await getDocs(
             query(collection(db, "Attachments"), where("messageId", "==", currentEditingMessageId))
         );
-        const updatedAttachments = updatedAttachmentsSnapshot.docs.map(doc => doc.data());
-        renderAttachments(updatedAttachments, messageContent);
-        hideLoadingChatNotification();
-        console.log("✅ Message updated successfully");
+
+
+        // Map the updated snapshot documents using the standard .data() method
+        const updatedAttachments = updatedSnapshot.docs.map(doc => doc.data());
+
+        // Isolate missing items using direct URL references
+        // Using optional chaining (?.) and a fallback string protects against missing or null downloadUrls
+        const updatedUrls = new Set(
+            updatedAttachments.map(att => (att?.downloadUrl || '').trim().toLowerCase())
+        );
+
+
+        // Filter your initialAttachments to find exactly what was removed
+        const deletedAttachments = initialAttachments.filter(att => {
+            if (!att.downloadUrl) return false;
+
+            const initialUrl = att.downloadUrl.trim().toLowerCase();
+
+            // If an initial item isn't in the updated DB list, it was removed from the message
+            return !updatedUrls.has(initialUrl);
+        });
+
+        // 4. CLEANUP: Clear global tracking state and purge local file servers
+        if (deletedAttachments.length > 0) {
+            const urlsToPurge = deletedAttachments.map(att => att.downloadUrl).filter(Boolean);
+
+            // Clean global tracking array safely using the verified list of deleted URLs
+            removeMessageAttachmentsFromGlobal(currentEditingMessageId, urlsToPurge);
+        }
+
+        // add newAttachments to Images Preview
+        const newAttachments = updatedAttachments.filter(updatedAtt => {
+            if (!updatedAtt.downloadUrl) return false;
+
+            // Check if this updated attachment does NOT exist anywhere in initialAttachments
+            return !initialAttachments.some(initialAtt =>
+                initialAtt.downloadUrl && initialAtt.downloadUrl.trim().toLowerCase() === updatedAtt.downloadUrl.trim().toLowerCase()
+            );
+        });
+
+        if (newAttachments.length > 0) {
+            addMessageAttachmentsToGlobal(currentEditingMessageId, newAttachments);
+        }
+
+
+        // Safe DOM Fallback view updates
+        let textContent = messageContent.querySelector('span:not(.message-reply-reference > span)');
+        if (textContent) textContent.innerHTML = newMessageHtml;
+
+        // Sync local interface mutations using the verified database data
+        if (messageContent) {
+            const messagesContainer = messageContent.closest("#messages");
+            if (messagesContainer) {
+                const currentRoomId = messagesContainer.dataset.roomId;
+                renderAttachments(updatedAttachments, messageContent, currentRoomId);
+            } else {
+                console.warn("Could not find the parent messages container in the DOM hierarchy.");
+            }
+        }
+
+        // SUCCESSFUL RESOLUTION CLOSURE
+        closeEdit();
+        console.log("Message updated successfully");
         currentEditingMessageId = null;
+
     } catch (error) {
-        console.error("❌ Error updating message:", error);
+        console.error("Error updating message:", error);
+        alert("Failed to save changes. Please try again.");
+    } finally {
+        hideLoadingChatNotification();
     }
 };
 
-// Close edit preview
 window.closeEdit = function () {
+    resetToolbar();
     const editPreview = document.querySelector(".message-edit-preview");
     const editorWrapper = document.querySelector(".editor-wrapper");
 
-    if (editPreview) {
-        editPreview.remove();
-        editorWrapper.classList.remove("edit-active");
-        const trixEditor = document.querySelector("trix-editor");
-        trixEditor.editor.loadHTML("");
-    }
+    if (editPreview) editPreview.remove();
+    if (editorWrapper) editorWrapper.classList.remove("edit-active");
+
+    const trixEditor = document.querySelector("trix-editor");
+    if (trixEditor) trixEditor.editor.loadHTML("");
 };
+
+// Listen for Trix attachment removal -  to clean left over blank lines after edit message
+document.addEventListener("trix-attachment-remove", function(event) {
+    const trixEditor = event.target.editor;
+    if (!trixEditor) return;
+
+    const doc = trixEditor.getDocument();
+    const docString = doc.toString();
+    const [position] = trixEditor.getSelectedRange();
+
+    // 1. Look for a double newline artifact anywhere near the deletion cursor
+    // This happens specifically when an attachment block is removed
+    if (docString.includes("\n\n")) {
+        // Find where the double newline is sitting in the document string
+        const doubleNewlineIndex = docString.indexOf("\n\n");
+
+        // 2. Target just one of those phantom newlines and delete it surgically
+        trixEditor.setSelectedRange([doubleNewlineIndex, doubleNewlineIndex + 1]);
+        trixEditor.deleteInDirection("backward");
+
+        // 3. Reset the user's cursor back to where it belongs minus the collapsed space
+        const newPosition = Math.max(0, position - 1);
+        trixEditor.setSelectedRange(newPosition);
+    }
+});
+
+function removeMessageAttachmentsFromGlobal(messageId, specificUrls = null) {
+    const currentRoomId = localStorage.getItem('roomId');
+    const urlsToRemove = new Set();
+
+    // Standardizer to match strings flawlessly regardless of protocol mismatches
+    const normalizeUrl = (url) => url ? url.trim().replace(/^https?:\/\//i, '').toLowerCase() : '';
+
+    if (specificUrls && Array.isArray(specificUrls)) {
+        // Mode A: Invoked by Save Edit flow (Deletes explicit array matches only)
+        specificUrls.forEach(url => {
+            if (url) urlsToRemove.add(normalizeUrl(url));
+        });
+    } else {
+        // Mode B: Invoked by Full Delete Flow (Scrapes entire DOM elements container)
+        const messageWrapper = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (!messageWrapper) return;
+
+        const attachmentsContainer = messageWrapper.querySelector(".attachments-container");
+        if (!attachmentsContainer) return;
+
+        attachmentsContainer.querySelectorAll("img.message-image").forEach(img => {
+            if (img.src) urlsToRemove.add(normalizeUrl(img.src));
+        });
+
+        attachmentsContainer.querySelectorAll("a.message-file-link").forEach(a => {
+            if (a.href) urlsToRemove.add(normalizeUrl(a.href));
+        });
+    }
+
+    if (urlsToRemove.size === 0) return;
+
+    // Filter global records without side effects
+    allImageUrls = allImageUrls.filter(item => {
+        const isTargetRoom = item.roomId === currentRoomId;
+        const isTargetUrl = urlsToRemove.has(normalizeUrl(item.url));
+
+        // Exclude the record only if it satisfies both room conditions and target items
+        return !(isTargetRoom && isTargetUrl);
+    });
+}
+
+function addMessageAttachmentsToGlobal(messageId, specificAttachments = null) {
+    const currentRoomId = localStorage.getItem('roomId');
+    if (!currentRoomId) return;
+
+    // Standardizer to match strings flawlessly regardless of protocol mismatches
+    const normalizeUrl = (url) => url ? url.trim().replace(/^https?:\/\//i, '').toLowerCase() : '';
+
+    // Create a Set of normalized URLs currently tracked in the global array to prevent duplicates
+    const existingUrlsInRoom = new Set(
+        allImageUrls
+            .filter(item => item.roomId === currentRoomId)
+            .map(item => normalizeUrl(item.url))
+    );
+
+    // This will temporarily house new, unique items to be pushed globally
+    const itemsToAdd = [];
+
+    if (specificAttachments && Array.isArray(specificAttachments)) {
+        // Mode A: Invoked by Save/Edit/Receive flow (Takes explicit arrays of attachment objects)
+        // Expected format: [{ downloadUrl: '...' }, { downloadUrl: '...' }]
+        specificAttachments.forEach(att => {
+            if (!att || !att.downloadUrl) return;
+
+            const normalized = normalizeUrl(att.downloadUrl);
+            if (!existingUrlsInRoom.has(normalized)) {
+                itemsToAdd.push({
+                    roomId: currentRoomId,
+                    messageId: messageId,
+                    url: att.downloadUrl // Store the pristine original URL
+                });
+                // Add it to our local tracking Set so we don't accidentally add the same item twice within this loop execution
+                existingUrlsInRoom.add(normalized);
+            }
+        });
+    } else {
+        // Mode B: Invoked by Fallback/Render Flow (Scrapes entire DOM elements container)
+        const messageWrapper = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (!messageWrapper) return;
+
+        const attachmentsContainer = messageWrapper.querySelector(".attachments-container");
+        if (!attachmentsContainer) return;
+
+        // Process images
+        attachmentsContainer.querySelectorAll("img.message-image").forEach(img => {
+            if (!img.src) return;
+
+            const normalized = normalizeUrl(img.src);
+            if (!existingUrlsInRoom.has(normalized)) {
+                itemsToAdd.push({
+                    roomId: currentRoomId,
+                    messageId: messageId,
+                    url: img.src
+                });
+                existingUrlsInRoom.add(normalized);
+            }
+        });
+
+        // Process files/documents
+        attachmentsContainer.querySelectorAll("a.message-file-link").forEach(a => {
+            if (!a.href) return;
+
+            const normalized = normalizeUrl(a.href);
+            if (!existingUrlsInRoom.has(normalized)) {
+                itemsToAdd.push({
+                    roomId: currentRoomId,
+                    messageId: messageId,
+                    url: a.href
+                });
+                existingUrlsInRoom.add(normalized);
+            }
+        });
+    }
+
+    // Append the new unique assets to your global tracker state
+    if (itemsToAdd.length > 0) {
+        allImageUrls = [...allImageUrls, ...itemsToAdd];
+    }
+}
 
 window.deleteMessage = async function (messageId) {
     if (!messageId) return;
     currentDeletingMessageId = messageId
     try {
+        var messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
         const batch = writeBatch(db);
 
         // Delete message from Firebase
         const messageRef = doc(db, "Messages", messageId);
         batch.delete(messageRef);
-
         // Fetch and delete attachments
         const attachmentsSnapshot = await getDocs(
             query(collection(db, "Attachments"), where("messageId", "==", messageId))
         );
         const attachments = attachmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
         await Promise.all(attachments.map(async (attachment) => {
             batch.delete(doc(db, "Attachments", attachment.id));
             await fetch(`/api/files/delete?fileName=${encodeURIComponent(attachment.fileName)}`, {
@@ -424,12 +656,10 @@ window.deleteMessage = async function (messageId) {
               headers: { 'Content-Type': 'application/json' }
             });
         }));
-
         await batch.commit();
-
         // Remove message from DOM
-        const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
         if (messageElement) {
+            removeMessageAttachmentsFromGlobal(messageId);
             messageElement.remove();
         }
 
@@ -439,7 +669,34 @@ window.deleteMessage = async function (messageId) {
     }
 };
 
+async function deleteDocumentsWithWhere() {
+    // 1. Create your query using 'where'
+    // const q = query(
+    //     collection(db, "Attachments"),
+    //     where("senderId", "not-in", [1, 2])
+    // );
 
+    const q = query(
+        collection(db, "Messages"),
+        where("messageId", "not-in", ["0PUm8uJiwKYtW5qoVFth"])
+    );
+
+
+    // 2. Fetch the documents matching the query
+    const querySnapshot = await getDocs(q);
+
+    // 3. Initialize a write batch
+    const batch = writeBatch(db);
+
+    querySnapshot.forEach((doc) => {
+        // Add each document's deletion reference to the batch
+        batch.delete(doc.ref);
+    });
+
+    // 4. Commit the batch to execute the deletions
+    await batch.commit();
+    console.log("Documents successfully deleted!");
+}
 
 
 function connectWebSocket() {
@@ -457,53 +714,26 @@ function subscribeToNotifications() {
     const roomId = localStorage.getItem("roomId");
     console.log('Subscribing to room:', roomId);
     if (roomId) {
-        stompClient.subscribe('/topic/notifications/' + roomId, function (notification) {
+        const topicPath = '/topic/notifications/' + roomId;
+
+        // Pass the topicPath as the custom ID in the headers object (the 2nd argument)
+        stompClient.subscribe(topicPath, function (notification) {
             console.log('Received notification:', notification);
-            handleNotification(notification.body); // Handle the incoming notification
-        });
+            showNotificationToast(notification.body, "success", "short-noty");
+        }, { id: topicPath }); // <--- THIS IS THE FIX
+
     } else {
         console.warn('No roomId found in localStorage');
     }
 }
 
-function handleNotification(message) {
-    console.log('Handling notification:', message);
-    notificationCount++; // Increment the notification count
-    showNotificationToast(message); // Show the toast notification
-}
-
-function showNotificationToast(message, persistent = false) {
-    const toastContainer = document.getElementById('toast-container');
-
-    // Create a new notification element
-    const notification = document.createElement('div');
-    notification.className = 'notification';
-    if(persistent == true){
-        notification.classList.add("error");
-    }
-    notification.innerText = message;
-
-    // Append the notification to the toast container
-    toastContainer.appendChild(notification);
-
-    if (!persistent) {
-        // Automatically hide the notification after 1 second if not persistent
-        setTimeout(() => {
-            notification.classList.add('hide');
-            // Remove the notification from the DOM after the fade-out transition
-            notification.addEventListener('transitionend', () => {
-                toastContainer.removeChild(notification);
-            });
-        }, 1000); // Adjust the duration as needed
-    } else {
-        // If persistent, do not auto-hide and allow for manual removal later
-        offlineNotification = notification; // Store reference for later use
-    }
+function showNotificationToast(message, type, duration) {
+    injectDynamicNotification(message, type, duration);
 }
 
 // Function to handle offline state
 function handleOffline() {
-    showNotificationToast('You are currently offline. Please check your internet connection.', true);
+    showNotificationToast("You are currently offline. Please check your internet connection", "error", "short-noty");
 }
 
 // Add a variable to track if the chat is loading
@@ -600,7 +830,7 @@ function handleOnline() {
         });
     }
 
-    showNotificationToast('You are back online!'); // Show a brief message about being back online
+    showNotificationToast("You are back online", "success", "short-noty");
     location.reload();
 }
 
@@ -661,6 +891,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     } catch (error) {
         console.log('Error fetching invites:', error);
     }
+    // deleteDocumentsWithWhere();
 });
 
 
@@ -1042,6 +1273,11 @@ async function handleNewMessages(snapshot, roomId) {
         const messagesContainer = document.getElementById("messages");
         if (!messagesContainer) return;
 
+        if (messagesContainer.getAttribute("data-room-id") !== roomId) {
+            messagesContainer.setAttribute("data-room-id", roomId);
+            console.log(`Room ID attribute updated to: ${roomId}`);
+        }
+
         const currentUserId = await fetchCurrentUserId();
 
         // Fetch the latest read receipts from the Rooms table
@@ -1091,7 +1327,7 @@ async function handleNewMessages(snapshot, roomId) {
                     // Fetch and add attachments if they exist
                     const attachments = await fetchAttachmentsForMessages([messageData.replyTo.messageId]);
                     if (attachments[messageData.replyTo.messageId]) {
-                        renderAttachments(attachments[messageData.replyTo.messageId], replyPreview);
+                        renderAttachments(attachments[messageData.replyTo.messageId], replyPreview, roomId);
                     }
                 }
                 // Insert reply preview at the beginning of message content
@@ -1272,7 +1508,7 @@ async function handleNewMessages(snapshot, roomId) {
                         messageContent.appendChild(actionsMenu);
                         messageWrapper.appendChild(messageContent);
                         // 3. Render Attachments for this Message
-                        renderAttachments(attachmentsByMessageId[data.messageId] || [], messageContent);
+                        renderAttachments(attachmentsByMessageId[data.messageId] || [], messageContent, roomId);
                         messagesContainer.appendChild(messageWrapper);
                         createReactionFeature(messageWrapper, data);
                     }
@@ -1293,7 +1529,6 @@ async function handleNewMessages(snapshot, roomId) {
                 } catch (error) {
                     console.error("Error fetching room:", error);
                 }
-                markMessagesAsRead(localStorage.getItem("roomId"));
                 resolve();
                 sessionStorage.setItem("newChat", "false");
             }, 300);
@@ -1390,7 +1625,7 @@ async function handleNewMessages(snapshot, roomId) {
                             existingAttachmentsContainer.remove();
                         }
                         // Re-render the attachments
-                        renderAttachments(editedAttachmentsByMessageId[messageId] || [], messageContent);
+                        renderAttachments(editedAttachmentsByMessageId[messageId] || [], messageContent, localStorage.getItem("roomId"));
 
                         // Reset the edited flag in Firestore
                         const messageRef = doc(db, "Messages", messageId);
@@ -1549,7 +1784,7 @@ async function handleNewMessages(snapshot, roomId) {
                       messageContent.appendChild(actionsMenu);
                       messageWrapper.appendChild(messageContent);
                       // 3. Render Attachments for this Message
-                      renderAttachments(attachmentsByMessageId[data.messageId] || [], messageContent); // Pass the attachments for this message
+                      renderAttachments(attachmentsByMessageId[data.messageId] || [], messageContent, roomId); // Pass the attachments for this message
                       messagesContainer.appendChild(messageWrapper);
                       createReactionFeature(messageWrapper, data);
                   }
@@ -1593,7 +1828,7 @@ async function fetchAttachmentsForMessages(messageIds) {
     return attachmentsByMessageId;
 }
 
-function renderAttachments(attachments, messageContent) {
+function renderAttachments(attachments, messageContent,messageRoomId) {
     // Remove existing attachments container if it exists
     const existingAttachments = messageContent.querySelector(".attachments-container");
     if (existingAttachments) {
@@ -1610,6 +1845,8 @@ function renderAttachments(attachments, messageContent) {
 
     // Store all images from all message contents globally
     attachments.forEach(attachment => {
+        console.log(attachment);
+        console.log(attachment.fileType);
         if (attachment.fileType.startsWith('image/')) {
             const imgWrapper = document.createElement('div');
             imgWrapper.classList.add('image-wrapper');
@@ -1623,13 +1860,21 @@ function renderAttachments(attachments, messageContent) {
             hoverText.classList.add('image-hover-text');
             hoverText.textContent = "Preview Image";
 
+            hoverText.onclick = () => openImagePreview(attachment.downloadUrl);
             imgElement.onclick = () => openImagePreview(attachment.downloadUrl);
 
             imgWrapper.appendChild(imgElement);
             imgWrapper.appendChild(hoverText);
             AttachmentsBox.appendChild(imgWrapper);
+            // Check if this specific URL is already tracked inside the current room context
+            const isDuplicate = allImageUrls.some(item => item.roomId === messageRoomId && item.url === attachment.downloadUrl);
 
-            allImageUrls.push(attachment.downloadUrl); // Add image to global list
+            if (!isDuplicate) {
+                allImageUrls.push({
+                    roomId: messageRoomId,
+                    url: attachment.downloadUrl
+                });
+            }
         } else {
             const fileLink = document.createElement('a');
             fileLink.href = attachment.downloadUrl;
@@ -1674,12 +1919,28 @@ function renderAttachments(attachments, messageContent) {
 }
 
 
-// Global list to store all images from all messages
+// Global list to store all images from all messages along with their room context
+// Structure: [{ roomId: "room_123", url: "https://..." }, ...]
 let allImageUrls = [];
 
 // Open Image Preview Modal
 function openImagePreview(currentImageUrl) {
-    let currentIndex = allImageUrls.indexOf(currentImageUrl);
+    // 1. Get the current active room ID
+    const currentRoomId = localStorage.getItem('roomId');
+
+    // 2. Filter the global array to get ONLY the images belonging to this room
+    const currentRoomImages = allImageUrls
+        .filter(item => item.roomId === currentRoomId)
+        .map(item => item.url);
+
+    // 3. Find the index within this filtered room-specific array
+    let currentIndex = currentRoomImages.indexOf(currentImageUrl);
+
+    // Fallback safeguard: If for some reason the image isn't tracked yet, show it standalone
+    if (currentIndex === -1 && currentImageUrl) {
+        currentRoomImages.push(currentImageUrl);
+        currentIndex = currentRoomImages.length - 1;
+    }
 
     const modal = document.createElement('div');
     modal.classList.add('image-preview-modal');
@@ -1688,7 +1949,7 @@ function openImagePreview(currentImageUrl) {
         <div class="modal-content">
             <span class="close-btn">&times;</span>
             <button class="prev-btn">&langle;</button>
-            <img src="${allImageUrls[currentIndex]}" class="modal-image">
+            <img src="${currentRoomImages[currentIndex] || ''}" class="modal-image">
             <button class="next-btn">&rangle;</button>
         </div>
     `;
@@ -1699,19 +1960,19 @@ function openImagePreview(currentImageUrl) {
     const prevBtn = modal.querySelector('.prev-btn');
     const nextBtn = modal.querySelector('.next-btn');
 
-    // Function to show image by index
+    // Function to show image by index from the room-specific list
     function showImage(index) {
-        if (index >= 0 && index < allImageUrls.length) {
+        if (index >= 0 && index < currentRoomImages.length) {
             currentIndex = index;
-            modalImage.src = allImageUrls[currentIndex];
+            modalImage.src = currentRoomImages[currentIndex];
             updateButtons();
         }
     }
 
-    // Update button visibility
+    // Update button visibility based on the current room's image count
     function updateButtons() {
         prevBtn.style.display = currentIndex === 0 ? 'none' : 'block';
-        nextBtn.style.display = currentIndex === allImageUrls.length - 1 ? 'none' : 'block';
+        nextBtn.style.display = currentIndex === currentRoomImages.length - 1 ? 'none' : 'block';
     }
 
     prevBtn.onclick = () => showImage(currentIndex - 1);
@@ -1749,104 +2010,196 @@ async function fetchCurrentUserRooms() {
   return currentUserRooms;
 }
 
+function playNotificationSound() {
+    try {
+        const audio = new Audio('/sounds/new-message.mp3');
 
-let currentMessagesSubscription = null;
+        // No explicit lower volume caps set here.
+        // It respects whatever master volume level the user's device is outputting.
+        audio.play();
+    } catch (error) {
+        console.warn("Failed to play notification sound:", error);
+    }
+}
+
+// A global Set to track room IDs that already have an active Firestore listener
+const activeNotificationListeners = new Set();
+// Global cache mapping: roomId -> "Other User's Name"
+const oneToOneRoomNamesCache = new Map();
+
+async function initializeBackgroundNotificationListeners() {
+    const currentUserRooms = await fetchCurrentUserRooms();
+    const currentUserId = await fetchCurrentUserId();
+
+    // 1. Pre-fetch and cache names for all 1-to-1 rooms first
+    for (const rId of currentUserRooms) {
+        if (activeNotificationListeners.has(rId)) continue;
+
+        const roomRef = doc(db, "Rooms", rId);
+        const roomDoc = await getDoc(roomRef);
+
+        if (roomDoc.exists()) {
+            const roomData = roomDoc.data();
+
+            // If name is blank or missing, it's a 1-to-1 room
+            if (!roomData.name || roomData.name.trim() === "") {
+                const userIds = roomData.userIds || [];
+
+                // Eliminate the current logged-in user to find the recipient's ID
+                const otherUserId = userIds.find(id => String(id) !== String(currentUserId));
+
+                if (otherUserId) {
+                    try {
+                        // Fetch the actual name from your database/API once
+                        const response = await fetch(`/api/users/getUsername?id=${Number(otherUserId)}`);
+                        if (!response.ok) throw new Error("Failed to fetch username");
+                        const otherUserName = await response.text();
+                        oneToOneRoomNamesCache.set(rId, otherUserName);
+                    } catch (err) {
+                        console.error(`Failed to fetch user name for ID ${otherUserId}:`, err);
+                        oneToOneRoomNamesCache.set(rId, "Someone"); // Fallback text
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Setup listeners as usual
+    currentUserRooms.forEach((rId) => {
+        if (activeNotificationListeners.has(rId)) return;
+        activeNotificationListeners.add(rId);
+
+        const messagesQueryForNewMessages = query(
+            collection(db, "Messages"),
+            where("roomId", "==", rId),
+            orderBy("timestamp", "asc")
+        );
+
+        // Persistent background snapshot listener
+        onSnapshot(messagesQueryForNewMessages, async (snapshot) => {
+            const roomRef = doc(db, "Rooms", rId);
+            try {
+                const roomDoc = await getDoc(roomRef);
+                if (!roomDoc.exists()) return;
+
+                const roomData = roomDoc.data();
+                let notificationText = "";
+
+                // Determine Notification String Structure
+                if (roomData.name && roomData.name.trim() !== "") {
+                    // Group Chat Rule
+                    notificationText = `New messages in ${roomData.name}`;
+                } else {
+                    // 1-to-1 Chat Rule: Instantly grab the name out of memory cache
+                    const senderName = oneToOneRoomNamesCache.get(rId) || "Someone";
+                    notificationText = `New messages from ${senderName}`;
+                }
+
+                let lastReadMessageId = roomData.lastReadMessageId || {};
+                const currentUserLastReadMessageId = lastReadMessageId[currentUserId];
+
+                const latestMessage = snapshot.docs[snapshot.docs.length - 1];
+                let latestMessageId = latestMessage ? latestMessage.id : null;
+
+                if (latestMessageId != null && currentUserLastReadMessageId !== latestMessageId) {
+                    const latestMessageData = latestMessage.data();
+                    const readyByUsers = latestMessageData.readyByUsers || [];
+
+                    if (!readyByUsers.includes(currentUserId)) {
+                        if (localStorage.getItem("roomId") !== rId) {
+                            showNotificationToast(notificationText,"success", "short-noty");
+                            playNotificationSound();
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Error checking new messages:", error);
+            }
+        });
+    });
+}
+
+let globalActiveChatListener = null;
+let globalMutationObserver = null;
+
 async function openChat(roomId) {
+    // 1. Manage WebSocket Swap (Top of function)
+    if (stompClient && stompClient.connected) {
+        const oldRoomId = localStorage.getItem("roomId");
+        if (oldRoomId) {
+            stompClient.unsubscribe('/topic/notifications/' + oldRoomId);
+        }
+    }
+
+    // 2. Clear ONLY the main active chat view listener
+    if (globalActiveChatListener) {
+        globalActiveChatListener();
+        globalActiveChatListener = null;
+    }
+    if (globalMutationObserver) {
+        globalMutationObserver.disconnect();
+    }
+
+    // 3. Set up new room state
     console.log(`Opening chat for room ID: ${roomId}`);
     sessionStorage.setItem("newChat", "true");
-     // Set up Firestore listener for real-time updates after processing invites
     localStorage.setItem("roomId", roomId);
-    const messagesQuery = query(
-        collection(db, "Messages"),
-        where("roomId", "==", localStorage.getItem("roomId")),
-        orderBy("timestamp", "asc")
-    );
 
-    const currentUserRooms = await fetchCurrentUserRooms();
-    // Loop through each room to check for new messages
-    currentUserRooms.forEach(async (roomId) => {
-      const messagesQueryForNewMessages = query(
+    if (stompClient && stompClient.connected) {
+        subscribeToNotifications();
+    }
+
+    // 4. Setup DOM Scroll Observer
+    const messagesContainer = document.getElementById("messages");
+    globalMutationObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === Node.ELEMENT_NODE &&
+                    node.tagName === 'DIV' && currentEditingMessageId == null && currentDeletingMessageId == null) {
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+                currentDeletingMessageId = null;
+            });
+        });
+    });
+    globalMutationObserver.observe(messagesContainer, { childList: true, subtree: true });
+
+    // 5. Define a tracking flag for the initial data payload
+    let isInitialLoad = true;
+
+    // 6. Active Chat Screen Firestore Listener
+    const messagesQuery = query(
         collection(db, "Messages"),
         where("roomId", "==", roomId),
         orderBy("timestamp", "asc")
-      );
+    );
 
-     onSnapshot(messagesQueryForNewMessages, async (snapshot) => {
-       const roomRef = doc(db, "Rooms", roomId);
-       try {
-         const roomDoc = await getDoc(roomRef);
-         if (!roomDoc.exists()) return;
-
-         const roomData = roomDoc.data();
-         let lastReadMessageId = roomData.lastReadMessageId || {};
-         const currentUserId = await fetchCurrentUserId();
-         const currentUserLastReadMessageId = lastReadMessageId[currentUserId];
-
-         // Get the latest message in the snapshot
-         const latestMessage = snapshot.docs[snapshot.docs.length - 1];
-         let latestMessageId = null;
-         if(latestMessage != undefined){
-           latestMessageId = latestMessage.id;
-         }
-
-         // Check if the current user has read the latest message
-         if (latestMessageId != null && currentUserLastReadMessageId !== latestMessageId) {
-           // Get the readyByUsers data from the latest message
-           const latestMessageData = latestMessage.data();
-           const readyByUsers = latestMessageData.readyByUsers || [];
-
-           // Check if the current user is in the readyByUsers list
-           if (!readyByUsers.includes(currentUserId)) {
-             // Check if the chat is open for a different room
-             if (localStorage.getItem("roomId") !== roomId) {
-               console.log("Chat is open for a different room, setting new message count");
-               showNotificationToast('New messages in ' + roomId);
-             }
-           }
-         }
-       } catch (error) {
-         console.error("Error checking new messages:", error);
-       }
-     });
-    });
-
-    const messagesContainer = document.getElementById("messages");
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-          mutation.addedNodes.forEach((node) => {
-            // Check if the added node is an element and has class 'message-wrapper'
-            if (node.nodeType === Node.ELEMENT_NODE &&
-                node.tagName === 'DIV' && currentEditingMessageId == null && currentDeletingMessageId == null) {
-              messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-              currentDeletingMessageId = null;
-          });
-      });
-    });
-    observer.observe(messagesContainer, { childList: true, subtree: true }); // Watch for added children
-    onSnapshot(messagesQuery, async (snapshot) => {
+    globalActiveChatListener = onSnapshot(messagesQuery, async (snapshot) => {
         try {
+            // Step A: Always await the message populating/rendering logic first
             await handleNewMessages(snapshot, roomId);
-            markMessagesAsRead(localStorage.getItem("roomId"));
+
+            // Step B: Check if this is the absolute first time the room is loading data
+            if (isInitialLoad) {
+                console.log(`Initial message render complete for room ${roomId}. Marking as read once.`);
+
+                await markMessagesAsRead(roomId); // Await it here to guarantee sequential execution
+                isInitialLoad = false;            // Flip the flag so this block NEVER runs again
+            }
+        } catch (error) {
+            console.error("Error processing messages snapshot:", error);
         } finally {
-            // **Display read receipts from Rooms table**
-            hideLoadingChatNotification(); // Hide loading notification after completion (success or failure)
+            hideLoadingChatNotification();
         }
     });
 
-
+    // 7. Independent synchronous UI updates can stay here
     displayReadByUsersFromRooms(roomId);
 
-    if (stompClient && stompClient.connected) {
-        console.log('Resubscribing to new room');
-        stompClient.unsubscribe('/topic/notifications/' + localStorage.getItem("roomId"));
-        subscribeToNotifications();
-    } else {
-        console.warn('STOMP client not connected');
-    }
-    notificationCount = 0; // Reset notification count when opening a new chat
+    // 8. If a user is added to a new room during their session,
+    // this keeps our background listeners up to date without duplicating existing ones.
+    initializeBackgroundNotificationListeners();
 }
-
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 // import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
@@ -2160,7 +2513,7 @@ async function sendMessage(roomId) {
                         downloadUrl: URL.createObjectURL(attachment.file),
                         fileName: attachment.file.name
                     }));
-                    renderAttachments(attachmentsData, messageContent);
+                    renderAttachments(attachmentsData, messageContent, roomId);
                 }
 
                 messagesContainer.appendChild(messageWrapper);
@@ -2261,25 +2614,23 @@ async function markMessagesAsRead(roomId) {
     showLoadingChatNotification("Updating");
     const currentUserId = await fetchCurrentUserId();
     if (!currentUserId || currentUserId === -1) return;
-
     const messagesContainer = document.getElementById("messages");
+
     if (!messagesContainer) return;
 
-    const lastMessageElement = messagesContainer.querySelector(".message-wrapper:last-of-type");
+    const lastMessageElement = messagesContainer.querySelector(".message-wrapper:not(:has(~ .message-wrapper))");
     if (!lastMessageElement) return;
 
     const messageId = lastMessageElement.dataset.messageId;
     if (!messageId) return;
 
     const roomRef = doc(db, "Rooms", roomId);
-    try {
 
+    try {
         const roomDoc = await getDoc(roomRef);
         if (!roomDoc.exists()) return;
-
         const roomData = roomDoc.data();
         let lastReadMessageId = roomData.lastReadMessageId || {};
-
         if (lastReadMessageId[currentUserId] !== messageId) {
             lastReadMessageId[currentUserId] = messageId;
             await updateDoc(roomRef, { lastReadMessageId });
