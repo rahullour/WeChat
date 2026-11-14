@@ -145,7 +145,7 @@ public class AppMVCController {
         }
 
         // Check for existing user
-        if (userService.getUserByEmail(user.getEmail()) != null) {
+        if (userService.getUserByEmail(user.getEmail()) != null && userService.getUserByEmail(user.getEmail()).isEnabled()) {
             errors.add("User already exists");
         }
 
