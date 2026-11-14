@@ -149,6 +149,11 @@ public class AppMVCController {
             errors.add("User already exists");
         }
 
+        // Remove existing user if not enabled
+        if (userService.getUserByEmail(user.getEmail()) != null && !userService.getUserByEmail(user.getEmail()).isEnabled()) {
+            userService.DeleteUserById(userService.getUserByEmail(user.getEmail()).getId());
+        }
+
         // If any errors were found, add them all to notifications at once
         if (!errors.isEmpty()) {
             for (String error : errors) {
