@@ -343,5 +343,16 @@ function previewProfileImage(event) {
     reader.readAsDataURL(event.target.files[0]);
 }
 </script>
+<script th:inline="javascript">
+    const firebaseConfig = {
+        apiKey: /*[[${@environment.getProperty('firebase.web.apiKey')}]]*/ "",
+        authDomain: /*[[${@environment.getProperty('firebase.web.authDomain')}]]*/ "",
+        projectId: /*[[${@environment.getProperty('firebase.web.projectId')}]]*/ "",
+        storageBucket: /*[[${@environment.getProperty('firebase.web.storageBucket')}]]*/ "",
+        messagingSenderId: /*[[${@environment.getProperty('firebase.web.messagingSenderId')}]]*/ "",
+        appId: /*[[${@environment.getProperty('firebase.web.appId')}]]*/ "",
+        measurementId: /*[[${@environment.getProperty('firebase.web.measurementId')}]]*/ ""
+    };
+</script>
 </body>
 </html>

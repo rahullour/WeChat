@@ -2209,23 +2209,10 @@ import { runTransaction, arrayUnion, writeBatch, getFirestore, collection, getDo
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyA7bzHTKqFCMSzZfgNYWUC7Nf_RjJk_ALQ",
-  authDomain: "wechat-ec503.firebaseapp.com",
-  projectId: "wechat-ec503",
-  storageBucket: "wechat-ec503.firebasestorage.app",
-  messagingSenderId: "416052037332",
-  appId: "1:416052037332:web:c1880edd4030a59aa51d41",
-  measurementId: "G-6HPJM7WKSM"
-};
-
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 // const analytics = getAnalytics(app);
 const db = getFirestore(app);
-
 
 function showAttachmentLimitNotification() {
     // Check if a notification is already present
